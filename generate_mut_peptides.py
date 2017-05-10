@@ -14,17 +14,22 @@ Options:
 """
 
 ################################### Imports ###################################
+from __future__ import print_function
+import sys
 from docopt import docopt
 import numpy as np
+from collections import defaultdict
+import pickle
 import Bio
 from Bio import SeqIO
 from Bio.Seq import Seq, MutableSeq
-from collections import defaultdict
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Alphabet import generic_protein
-import pickle
 
 ################################## Functions ##################################
+def eprint(*args, **kwargs):
+	"""Print to stderr"""
+	print(*args, file=sys.stderr, **kwargs)
 
 ################################### Classes ###################################		
 class peptide:
@@ -53,7 +58,8 @@ class peptide:
 			self.sub[mutPos] = mutation
 			self.mutPep[mutPos] = aaList[mutation[1]]
 		except ValueError:
-			print("No "+aaList[mutation[0]]+" residues left in the mutated sequence.")
+			eprint("No "+aaList[mutation[0]]+" residues left in the mutated sequence.")
+			return
 
 ##################################### Main ####################################
 arguments = docopt(__doc__)
@@ -89,8 +95,9 @@ for k, p in zip(xrange(nbSubstitutions), subProb):
 
 # Decide which peptide to mutate
 pepDictIndices = np.random.randint(nbPep, size=nbSubstitutions)
+pepDictIndices.sort()
 
-# Store number of mutations
+# Store number of mutations	
 pepDict = defaultdict(peptide)
 for i in pepDictIndices:
 	pepDict[i].addSub()
@@ -100,9 +107,19 @@ subIndex = 0
 for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep)):
 	if i in pepDictIndices:
 		# The residues to mutate need to be present in the selected sequence
-		assert aaList[subList[subIndex,0]] in pep.seq
-		subIndex += 1
-		pepDict[i].setPep(pep)
+		try:
+			tempSubIndex = 0
+			for j in pepDictIndices[pepDictIndices == i]:
+				assert aaList[subList[subIndex+tempSubIndex,0]] in pep.seq
+				tempSubIndex += 1
+			subIndex += tempSubIndex
+			pepDict[i].setPep(pep)
+		except AssertionError:
+			# Try the next peptide instead
+			pepDictIndices[pepDictIndices == i] += 1
+			# The current peptide will not have any mutation and the next one will have more
+			pepDict[i+1].nbSub += pepDict[i].nbSub
+			pepDict[i].nbSub = 0
 
 # Perform mutations
 for i, mut in zip(pepDictIndices, subList):
