@@ -32,6 +32,7 @@ class peptide:
 
 	def __init__(self):
 		self.nbSub = 0 # Number of substitutions to perform
+		self.sub = {} # Substitution realized
 		self.normPep = Seq("", generic_protein) # Normal peptide
 		self.mutPep = MutableSeq("", generic_protein) # Reference peptide
 
@@ -46,8 +47,13 @@ class peptide:
 	def __str__(self):
 		return(str(self.nbSub)+"\n"+str(self.normPep)+"\n"+str(self.mutPep))
 
-	def mutate(self, subMatrix):
-		1
+	def mutate(self, mutation):
+		try:
+			mutPos = np.random.choice([pos for pos, char in enumerate(self.mutPep) if char == aaList[mutation[0]] and pos not in self.sub.keys()])
+			self.sub[mutPos] = mutation
+			self.mutPep[mutPos] = aaList[mutation[1]]
+		except ValueError:
+			print("No "+aaList[mutation[0]]+" residues left in the mutated sequence.")
 
 ##################################### Main ####################################
 arguments = docopt(__doc__)
@@ -99,5 +105,5 @@ for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep))
 		pepDict[i].setPep(pep)
 
 # Perform mutations
-for i in pepDictIndices:
-	pepDict[i].mutate(subMatrix)
+for i, mut in zip(pepDictIndices, subList):
+	pepDict[i].mutate(mut)
