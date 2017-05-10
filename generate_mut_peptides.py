@@ -3,12 +3,14 @@
 ##################################### Help ####################################
 """Generate mutated peptides in fasta format
 Usage:
-  generate_mut_peptides.py <nbSubstitutions> -p <refPeptidome>
+  generate_mut_peptides.py -n <nbSubstitutions> -p <refPeptidome> -m <substitutionMatrix>
   generate_mut_peptides.py --help
 
 Options:
-  -p --peptidome     Reference peptidome to be mutated (fasta format) 
-  -h --help          Show this screen.
+  -n --number=<nbSubstitutions>      Number of substitutions to perform
+  -p --peptidome=<refPeptidome>      Reference peptidome to be mutated (fasta format) 
+  -m --matrix=<substitutionMatrix>   Path to the substitution matrix pickle to use
+  -h --help                          Show this screen.
 """
 
 ################################### Imports ###################################
@@ -20,6 +22,7 @@ from Bio.Seq import Seq, MutableSeq
 from collections import defaultdict
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Alphabet import generic_protein
+import pickle
 
 ################################## Functions ##################################
 
@@ -43,15 +46,18 @@ class peptide:
 	def __str__(self):
 		return(str(self.nbSub)+"\n"+str(self.normPep)+"\n"+str(self.mutPep))
 
+	def mutate(self, subMatrix):
+		1
+
 ##################################### Main ####################################
 arguments = docopt(__doc__)
 
 # Number of amino acid substitutions to perform
-nbSubstitutions = int(arguments["<nbSubstitutions>"])
+nbSubstitutions = int(arguments["--number"])
 
 # Number of peptides in the reference peptidome
 nbPep = 0
-with open(arguments["<refPeptidome>"], "r") as handle:
+with open(arguments["--peptidome"], "r") as handle:
 	for i in SimpleFastaParser(handle):
 		nbPep += 1
 
@@ -64,8 +70,13 @@ for i in pepDictIndices:
 	pepDict[i].addSub()
 
 # Read and store these peptides
-pepDictIndices = set(pepDictIndices)
-for pep, i in zip(SeqIO.parse(arguments["<refPeptidome>"], "fasta"), xrange(nbPep)):
+for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep)):
 	if i in pepDictIndices:
 		pepDict[i].setPep(pep)
 
+# Load substitution matrix
+subMatrix = pickle.load(open(arguments["--matrix"], "r"))
+
+# Perform mutations
+for i in pepDictIndices:
+	pepDict[i].mutate(subMatrix)
