@@ -3,13 +3,14 @@
 ##################################### Help ####################################
 """Generate mutated peptides in fasta format
 Usage:
-  generate_mut_peptides.py -n <nbSubstitutions> -p <refPeptidome> -m <substitutionMatrix>
+  generate_mut_peptides.py -n <nbSubstitutions> -p <refPeptidome> -m <substitutionMatrix> [-o <outputPrefix>]
   generate_mut_peptides.py --help
 
 Options:
   -n --number=<nbSubstitutions>      Number of substitutions to perform
   -p --peptidome=<refPeptidome>      Reference peptidome to be mutated (fasta format) 
   -m --matrix=<substitutionMatrix>   Path to the substitution matrix pickle to use
+  -o --output=<outputPrefix>         Prefix for the fasta output files
   -h --help                          Show this screen.
 """
 
@@ -23,6 +24,7 @@ import pickle
 import Bio
 from Bio import SeqIO
 from Bio.Seq import Seq, MutableSeq
+from Bio.SeqRecord import SeqRecord
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Alphabet import generic_protein
 
@@ -63,6 +65,8 @@ class peptide:
 
 ##################################### Main ####################################
 arguments = docopt(__doc__)
+if not arguments['--output']:
+	arguments['--output'] = ""
 
 aaList = 'ARNDCQEGHILKMFPSTWYVBZX'
 
@@ -124,3 +128,7 @@ for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep))
 # Perform mutations
 for i, mut in zip(pepDictIndices, subList):
 	pepDict[i].mutate(mut)
+
+# Output
+SeqIO.write([SeqRecord(s.mutPep) for s in pepDict.values()], arguments["--output"]+"mutatedRegion_mut.fa", "fasta")
+SeqIO.write([SeqRecord(s.normPep) for s in pepDict.values()], arguments["--output"]+"mutatedRegion_norm.fa", "fasta")
