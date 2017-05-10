@@ -52,6 +52,8 @@ class peptide:
 ##################################### Main ####################################
 arguments = docopt(__doc__)
 
+aaList = 'ARNDCQEGHILKMFPSTWYVBZX'
+
 # Number of amino acid substitutions to perform
 nbSubstitutions = int(arguments["--number"])
 
@@ -60,6 +62,24 @@ nbPep = 0
 with open(arguments["--peptidome"], "r") as handle:
 	for i in SimpleFastaParser(handle):
 		nbPep += 1
+
+# Load substitution matrix
+subMatrix = pickle.load(open(arguments["--matrix"], "r"))[:20,:20]
+
+# Decide which mutation to perform
+subProb = np.random.rand(nbSubstitutions)
+subList = np.empty([nbSubstitutions, 2], dtype=int)
+for k, p in zip(xrange(nbSubstitutions), subProb):
+	cumProb = 0
+	for i in xrange(20):
+		for j in xrange(20):
+			cumProb += subMatrix[i,j]
+			if cumProb >= p:
+				subList[k] =  [i,j]
+				cumProb += 1
+				break
+		if cumProb >= 1:
+			break
 
 # Decide which peptide to mutate
 pepDictIndices = np.random.randint(nbPep, size=nbSubstitutions)
@@ -70,12 +90,13 @@ for i in pepDictIndices:
 	pepDict[i].addSub()
 
 # Read and store these peptides
+subIndex = 0
 for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep)):
 	if i in pepDictIndices:
+		# The residues to mutate need to be present in the selected sequence
+		assert aaList[subList[subIndex,0]] in pep.seq
+		subIndex += 1
 		pepDict[i].setPep(pep)
-
-# Load substitution matrix
-subMatrix = pickle.load(open(arguments["--matrix"], "r"))
 
 # Perform mutations
 for i in pepDictIndices:
