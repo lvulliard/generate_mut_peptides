@@ -3,7 +3,7 @@
 ##################################### Help ####################################
 """Generate mutated peptides in fasta format
 Usage:
-  generate_mut_peptides.py -n <nbSubstitutions> -p <refPeptidome> -m <substitutionMatrix> [-o <outputPrefix>]
+  generate_mut_peptides.py -n <nbSubstitutions> -p <refPeptidome> -m <substitutionMatrix> [-o <outputPrefix> -i]
   generate_mut_peptides.py --help
 
 Options:
@@ -11,17 +11,16 @@ Options:
   -p --peptidome=<refPeptidome>      Reference peptidome to be mutated (fasta format) 
   -m --matrix=<substitutionMatrix>   Path to the substitution matrix pickle to use
   -o --output=<outputPrefix>         Prefix for the fasta output files
+  -i --intervals-only                Output only the mutated regions, up to 10 flanking amino acids on each side of the mutations
   -h --help                          Show this screen.
 """
 
 ################################### Imports ###################################
 from __future__ import print_function
-import sys
+import sys, copy, pickle, Bio
 from docopt import docopt
 import numpy as np
 from collections import defaultdict
-import pickle
-import Bio
 from Bio import SeqIO
 from Bio.Seq import Seq, MutableSeq
 from Bio.SeqRecord import SeqRecord
@@ -35,11 +34,12 @@ def eprint(*args, **kwargs):
 
 ################################### Classes ###################################		
 class peptide:
-	"""Peptide to be mutated"""
+	"""Peptide to mutate"""
 
 	def __init__(self):
 		self.nbSub = 0 # Number of substitutions to perform
 		self.sub = {} # Substitution realized
+		self.intervals = [] # Mutated intervals to extract in order
 		self.normPep = Seq("", generic_protein) # Normal peptide
 		self.mutPep = MutableSeq("", generic_protein) # Reference peptide
 
@@ -50,6 +50,7 @@ class peptide:
 		pep.seq.alphabet = generic_protein
 		self.normPep = self.normPep + pep.seq
 		self.mutPep = self.mutPep + pep.seq
+		self.intervals = [0, len(pep.seq)]
 
 	def __str__(self):
 		return(str(self.nbSub)+"\n"+str(self.normPep)+"\n"+str(self.mutPep))
@@ -59,9 +60,39 @@ class peptide:
 			mutPos = np.random.choice([pos for pos, char in enumerate(self.mutPep) if char == aaList[mutation[0]] and pos not in self.sub.keys()])
 			self.sub[mutPos] = mutation
 			self.mutPep[mutPos] = aaList[mutation[1]]
+			# If all mutations have been performed and we need to extract only the mutated region
+			if arguments['--intervals-only'] and len(self.sub) == self.nbSub:
+				# Truncate the sequences to keep only the set of mutated 11-mers
+				self.trunc()
 		except ValueError:
 			eprint("No "+aaList[mutation[0]]+" residues left in the mutated sequence.")
-			return
+
+	def trunc(self):
+		self.intervals = []
+		# For each substitution
+		for s in self.sub.keys():
+			# Store up to 10 flanking positions on each side
+			# Upper coordinate is incremented so that we can use the interval as python-like coordinates of the sequence to extract
+			self.intervals.extend([max(0,s-10), min(len(self.mutPep), s+11)])
+		interv_copy = copy.copy(self.intervals)
+		self.intervals.sort()
+		i = 0
+		shift = 0
+		while i < len(interv_copy):
+			if self.intervals[i-shift] != interv_copy[i]:
+				# Intervals are overlapping
+				# Join overlapping intervals
+				del self.intervals[i:i+2]
+				# Go to next interval and remember that we deleted and interval from the list
+				i += 1
+				shift += 2
+			i += 1
+
+	def mutRecord(self):
+		return([SeqRecord(self.mutPep[self.intervals[(2*i)]:self.intervals[(2*i+1)]]) for i in xrange(len(self.intervals)/2)]) 
+
+	def normRecord(self):
+		return([SeqRecord(self.normPep[self.intervals[(2*i)]:self.intervals[(2*i+1)]]) for i in xrange(len(self.intervals)/2)]) 
 
 ##################################### Main ####################################
 arguments = docopt(__doc__)
@@ -129,6 +160,6 @@ for pep, i in zip(SeqIO.parse(arguments["--peptidome"], "fasta"), xrange(nbPep))
 for i, mut in zip(pepDictIndices, subList):
 	pepDict[i].mutate(mut)
 
-# Output
-SeqIO.write([SeqRecord(s.mutPep) for s in pepDict.values()], arguments["--output"]+"mutatedRegion_mut.fa", "fasta")
-SeqIO.write([SeqRecord(s.normPep) for s in pepDict.values()], arguments["--output"]+"mutatedRegion_norm.fa", "fasta")
+# Output (only the kept intervals)
+SeqIO.write([record for protRecord in [s.mutRecord() for s in pepDict.values()] for record in protRecord], arguments["--output"]+"mutatedRegion_mut.fa", "fasta")
+SeqIO.write([record for protRecord in [s.normRecord() for s in pepDict.values()] for record in protRecord], arguments["--output"]+"mutatedRegion_norm.fa", "fasta")
