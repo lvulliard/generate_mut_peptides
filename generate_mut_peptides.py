@@ -42,6 +42,7 @@ class peptide:
 		self.intervals = [] # Mutated intervals to extract in order
 		self.normPep = Seq("", generic_protein) # Normal peptide
 		self.mutPep = MutableSeq("", generic_protein) # Reference peptide
+		self.name = "" # Name of the peptide
 
 	def addSub(self):
 		self.nbSub += 1
@@ -51,6 +52,7 @@ class peptide:
 		self.normPep = self.normPep + pep.seq
 		self.mutPep = self.mutPep + pep.seq
 		self.intervals = [0, len(pep.seq)]
+		self.name = pep.name
 
 	def __str__(self):
 		return(str(self.nbSub)+"\n"+str(self.normPep)+"\n"+str(self.mutPep))
@@ -89,10 +91,20 @@ class peptide:
 			i += 1
 
 	def mutRecord(self):
-		return([SeqRecord(self.mutPep[self.intervals[(2*i)]:self.intervals[(2*i+1)]]) for i in xrange(len(self.intervals)/2)]) 
+		return(self.getRecord(self.mutPep))
 
 	def normRecord(self):
-		return([SeqRecord(self.normPep[self.intervals[(2*i)]:self.intervals[(2*i+1)]]) for i in xrange(len(self.intervals)/2)]) 
+		return(self.getRecord(self.normPep))
+
+	def getRecord(self, seqType):
+		nbInt = len(self.intervals)/2
+		if(self.intervals == []):
+			# Peptide was not processed and must be skipped in the output
+			return([])
+		if nbInt > 1:
+			return([SeqRecord(seqType[self.intervals[(2*i)]:self.intervals[(2*i+1)]], description = "", id = "{}_{}/{}".format(self.name, i+1, nbInt) ) for i in xrange(nbInt)]) 
+		return([SeqRecord(seqType[self.intervals[0]:self.intervals[1]], description = "", id = self.name)]) 
+
 
 ##################################### Main ####################################
 arguments = docopt(__doc__)
